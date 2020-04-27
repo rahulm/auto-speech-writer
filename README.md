@@ -7,4 +7,4 @@ An automatic speech writer developed as a final project for CS 263 under Prof. K
 | ------------- | ------------- |
 | Rahul Malavalli | rahul.malavalli@gmail.com |
 | Scott Bauersfeld | sbauersfeld@ucla.edu |
-| Maggie Xiao | zxiao2015@g.ucla.edu |
+| Maggie Xiao | zxiao2015@gmail.com|
