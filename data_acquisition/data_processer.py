@@ -22,14 +22,14 @@ def process_data(input_file_loc: Text) -> None:
 
   num_entries: int = 0
 
-  with open(input_file_loc, 'r', newline='', encoding='utf-8') as csv_file:
+  with open(input_file_loc, "r", newline="", encoding="utf-8") as csv_file:
     reader = csv.DictReader(
       csv_file, quoting=csv.QUOTE_ALL
     )
     for entry in reader:
       num_entries += 1
 
-      print("{}".format(repr(entry['speech-speaker_name'])))
+      print("{}".format(repr(entry["speech-speaker_name"])))
   
   print("\nnum_entries: {}".format(num_entries))
 
