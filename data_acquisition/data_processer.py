@@ -17,9 +17,13 @@ while True:
     max_int = int(max_int/10)
 
 
-def process_data(input_file_loc: Text) -> None:
-  print("Input file location: {}".format(input_file_loc))
-
+def process_data(
+  input_file_loc: Text,
+  output_file_loc: Text,
+) -> None:
+  print("Input csv location: {}".format(input_file_loc))
+  print("Output csv location: {}".format(output_file_loc))
+  
   num_entries: int = 0
 
   with open(input_file_loc, "r", newline="", encoding="utf-8") as csv_file:
@@ -38,7 +42,12 @@ def parse_args() -> argparse.Namespace:
   parser: argparse.ArgumentParser = argparse.ArgumentParser(description="Process web scraped data.")
   parser.add_argument(
     "-i", "--input", type=str, required=True,
-    help="Input file location"
+    help="Input csv location"
+  )
+
+  parser.add_argument(
+    "-o", "--output", type=str, required=True,
+    help="Location (csv) where to output processed data"
   )
 
   return parser.parse_args()
@@ -46,7 +55,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
   args: argparse.Namespace = parse_args()
-  process_data(input_file_loc = args.input)
+  process_data(
+    input_file_loc = args.input,
+    output_file_loc = args.output
+  )
 
 
 if __name__ == "__main__":
