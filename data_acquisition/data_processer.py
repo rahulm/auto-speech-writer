@@ -101,6 +101,7 @@ def process_data(
       output_writer = csv.DictWriter(
         output_file, quoting=csv.QUOTE_ALL, fieldnames=output_csv_fields
       )
+      output_writer.writeheader()
 
       num_input_entries: int = 0
 
