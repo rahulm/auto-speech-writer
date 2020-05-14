@@ -26,6 +26,11 @@ class EntryParser():
     self.output_field: Text = output_field
     self.input_field: Text = input_field
     self.parser: Callable[[Text], Text] = parser
+  
+  def parse(self, x: Text) -> Text:
+    if (not x) or (x == "null"):
+      raise ValueError("Input string is empty.")
+    return self.parser(x)
 
 
 # Start: parser function implementations
@@ -40,9 +45,6 @@ def parser_compress_all_whitespace(x: Text) -> Text:
 def parser_compress_whitespace_from_json(json_key: Text) -> Callable:
 
   def inner_function(json_str: Text) -> Text:
-    if (not json_str) or (json_str == "null"):
-      raise ValueError("JSON string is empty.")
-
     json_array = json.loads(json_str)
     if not json_array:
       raise ValueError("JSON string is not readable.")
@@ -154,7 +156,7 @@ def process_data(
         # Processing each piece of data, as needed
         try:
           output_dict: Dict[Text, Text] = {
-            entry_parser.output_field : entry_parser.parser(
+            entry_parser.output_field : entry_parser.parse(
               entry[entry_parser.input_field]
             )
             for entry_parser in output_csv_parsers
@@ -170,9 +172,10 @@ def process_data(
           num_output_entries += 1
 
         except Exception as e:
-          print("Error encountered, skipping:\n\tSpeech: {}\n\tSpeaker: {}\n\tError: {}\n".format(
+          print("Error encountered, skipping:\n\tSpeech: {}\n\tSpeaker: {}\n\tLink: {}\n\tError: {}\n".format(
             parser_compress_all_whitespace(entry["speech-speech_name"]),
             parser_compress_all_whitespace(entry["speech-speaker_name"]),
+            entry["speech_page-href"],
             e
           ))
       
