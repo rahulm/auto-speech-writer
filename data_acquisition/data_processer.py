@@ -109,11 +109,11 @@ def process_data(
     ),
 
     # Extra metadata (experimental)
-    EntryParser(
-      output_field="subtitle",
-      input_field="speech-subtitle",
-      parser=parser_compress_all_whitespace
-    ),
+    # EntryParser(
+    #   output_field="subtitle",
+    #   input_field="speech-subtitle",
+    #   parser=parser_compress_all_whitespace
+    # ),
     EntryParser(
       output_field="year",
       input_field="speech-subtitle",
