@@ -50,9 +50,11 @@ def parser_compress_whitespace_from_json(json_key: Text) -> Callable:
     text_array = [
       parser_compress_all_whitespace(item[json_key])
       for item in json_array
-      if item[json_key]
     ]
-    return "\n".join(text_array)
+    return "\n".join(
+      item for item in text_array
+      if item
+    )
 
   return inner_function
 
