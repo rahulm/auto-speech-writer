@@ -28,6 +28,30 @@ class EntryParser():
     self.parser: Callable[[Text], Text] = parser
 
 
+# Start: parser function implementations
+# TODO: Maybe move this into a different file. Kept this here for development.
+import json
+import re
+
+def parser_compress_all_whitespace(x: Text) -> Text:
+  return re.sub(r"\s+", " ", x)
+
+
+def parser_compress_whitespace_from_json(json_key: Text) -> Callable:
+
+  def inner_function(json_str: Text) -> Text:
+    json_array = json.loads(json_str)
+    text_array = [
+      parser_compress_all_whitespace(item[json_key])
+      for item in json_array
+      if item[json_key]
+    ]
+    return "\n".join(text_array)
+
+  return inner_function
+
+# End: parser function implementations
+
 def process_data(
   input_file_loc: Text,
   output_file_loc: Text,
@@ -55,29 +79,29 @@ def process_data(
     EntryParser(
       output_field="title",
       input_field="speech-speech_name",
-      parser=lambda x:x
+      parser=parser_compress_all_whitespace
     ),
     EntryParser(
       output_field="speaker",
       input_field="speech-speaker_name",
-      parser=lambda x:x
+      parser=parser_compress_all_whitespace
     ),
     EntryParser(
       output_field="transcript",
       input_field="speech-transcript_json",
-      parser=lambda x:x
+      parser=parser_compress_whitespace_from_json("speech-transcript_json")
     ),
 
     # Extra metadata (experimental)
     EntryParser(
       output_field="subtitle",
       input_field="speech-subtitle",
-      parser=lambda x:x
+      parser=parser_compress_all_whitespace
     ),
     EntryParser(
       output_field="year",
       input_field="speech-subtitle",
-      parser=lambda x:x
+      parser=parser_compress_all_whitespace
     )
   ]
 
