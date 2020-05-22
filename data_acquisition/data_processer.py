@@ -33,7 +33,12 @@ class EntryParser():
   def parse(self, x: Text) -> Text:
     if (not x) or (x == "null"):
       raise ValueError("Input string is empty.")
-    return self.parser(x)
+    
+    output: Text = self.parser(x)
+    if output:
+      return output
+    else:
+      raise ValueError("Parsed string is empty.")
 
 
 # Start: parser function implementations
