@@ -208,7 +208,13 @@ Defaults to 'train' = 1 (all training).
     help="The random seed to use. Defaults to 1234"
   )
 
-  return parser.parse_args()
+  args = parser.parse_args()
+  split_train, split_val = args.split
+  if (split_train < 0) or (split_train > 1):
+    parser.error("Train split {} is invalid.".format(split_train))
+  if (split_val < 0) or (split_val > 1):
+    parser.error("Val split {} is invalid.".format(split_val))
+  return args
 
 
 def main() -> None:
@@ -217,8 +223,6 @@ def main() -> None:
   log_file_loc = args.log if args.log else ""
   with LoggerFactory(log_file_loc) as logger_factory:
     logger_factory.set_loggers()
-
-    # TODO: do validation on args.split (0<=1)
 
     split_and_convert_data(
       input_file_loc=args.input,
