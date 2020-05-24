@@ -29,16 +29,34 @@ class FormatTemplate():
     self.convert: Callable[[Dict], Text] = convert_fn
 
 
+def convert_tag_all_except_transcript() -> Callable[[Dict], Text]:
+  input_headers: List[Text] = [
+    "title",
+    "speaker",
+    "year",
+    "summary"
+  ]
+  transcript_header: Text = "transcript"
+  def inner_function(d: Dict) -> Text:
+    output_row_list: List[Text] = [
+      '<{}="{}">'.format(header, d[header])
+      for header in input_headers
+    ]
+    output_row_list.append(d[transcript_header])
+    return '\n'.join(output_row_list)
+  return inner_function
+
+
 FORMAT_TEMPLATES: Dict[Text, FormatTemplate] = {
-  "tag_except_transcript" : FormatTemplate(
-    name="tag_except_transcript",
-    convert_fn=lambda x: str(x)
+  "tag_all_except_transcript" : FormatTemplate(
+    name="tag_all_except_transcript",
+    convert_fn=convert_tag_all_except_transcript()
   )
 }
 
 
 FORMAT_NAMES: List[Text] = list(FORMAT_TEMPLATES.keys())
-FORMAT_DEFAULT: Text = "tag_except_transcript"
+FORMAT_DEFAULT: Text = "tag_all_except_transcript"
 
 
 def convert_data(
