@@ -64,6 +64,10 @@ def convert_data(
   output_file_loc: Text,
   format_name: Text
 ) -> None:
+  print("Input csv location: {}".format(input_file_loc))
+  print("Output location: {}".format(output_file_loc))
+  print("Format name: {}".format(format_name))
+  
   format_template: FormatTemplate = FORMAT_TEMPLATES[format_name]
   num_entries: int = 0
 
