@@ -41,8 +41,26 @@ FORMAT_NAMES: List[Text] = list(FORMAT_TEMPLATES.keys())
 FORMAT_DEFAULT: Text = "tag_except_transcript"
 
 
-def convert_data(input_file_loc: Text, output_file_loc: Text) -> None:
-  return
+def convert_data(
+  input_file_loc: Text,
+  output_file_loc: Text,
+  format_name: Text
+) -> None:
+  format_template: FormatTemplate = FORMAT_TEMPLATES[format_name]
+  num_entries: int = 0
+
+  with open(input_file_loc, "r", newline="", encoding="utf-8") as input_file:
+    input_reader = csv.DictReader(
+      input_file, quoting=csv.QUOTE_ALL
+    )
+    with open(output_file_loc, "w", encoding="utf-8") as output_file:
+      for input_entry in input_reader:
+        output_txt: Text = format_template.convert(input_entry)
+        output_file.write(output_txt)
+        output_file.write("\n")
+        num_entries += 1
+  
+  print("Number of entries: {}".format(num_entries))
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,14 +100,11 @@ def main() -> None:
   with LoggerFactory(log_file_loc) as logger_factory:
     logger_factory.set_loggers()
 
-    # convert_data(
-
-    # )
-
-    # process_data(
-    #   input_file_loc = args.input,
-    #   output_file_loc = args.output
-    # )
+    convert_data(
+      input_file_loc=args.input,
+      output_file_loc=args.output,
+      format_name=args.format
+    )
 
 
 if __name__ == "__main__":
