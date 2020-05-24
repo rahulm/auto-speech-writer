@@ -4,10 +4,12 @@ of the GPT2, or other model.
 """
 import argparse
 import csv
+import os
 import sys
-from typing import Callable, Dict, List, Text
+from typing import Callable, Dict, List, Text, Tuple
 
 import pandas as pd
+
 from loggers import LoggerFactory
 
 # This field_size_limit is needed to import the data CSV
@@ -100,11 +102,65 @@ def split_and_convert_data(
   # First read the csv
   input_df = pd.read_csv(input_file_loc, quoting=csv.QUOTE_ALL)
 
+  # Compile the tuples of (data split, output file name) to process
+  split_pairs: List[Tuple[List, Text]] = []
+
   if (train_split == 1.0) and (val_split == 0.0):
-    # If no train-val-test split is needed, just perform the conversion directly
+    # No train-test split, so add to split_pairs
+    split_pairs.append((input_df.to_dict("records"), output_file_loc))
+  else:
+    # Get the output file prefix and extension
+    output_file_prefix, output_file_ext = os.path.splitext(output_file_loc)
+
+    if train_split < 1.0:
+      # Perform a train-test split
+      test_split: float = 1.0 - train_split
+      test_df = input_df.sample(
+        frac=test_split,
+        replace=False,
+        random_state=random_seed
+      )
+      test_output_file_loc: Text = "{}-{}{}".format(
+        output_file_prefix,
+        "test",
+        output_file_ext
+      )
+      split_pairs.append((test_df.to_dict("records"), test_output_file_loc))
+
+      train_df = input_df.loc[~input_df.index.isin(test_df.index)]
+    else:
+      # no train-test split
+      train_df = input_df
+    
+    if val_split > 0.0:
+      # There is a train-val split
+
+      val_df = train_df.sample(
+        frac=val_split,
+        replace=False,
+        random_state=random_seed
+      )
+      val_output_file_loc: Text = "{}-{}{}".format(
+        output_file_prefix,
+        "val",
+        output_file_ext
+      )
+      split_pairs.append((val_df.to_dict("records"), val_output_file_loc))
+
+      train_df = train_df.loc[~train_df.index.isin(val_df.index)]
+    
+    train_output_file_loc: Text = "{}-{}{}".format(
+      output_file_prefix,
+      "train",
+      output_file_ext
+    )
+    split_pairs.append((train_df.to_dict("records"), train_output_file_loc))
+  
+  
+  for split_data, split_output_file_loc in split_pairs:
     convert_data(
-      input_list=input_df.to_dict('records'),
-      output_file_loc=output_file_loc,
+      input_list=split_data,
+      output_file_loc=split_output_file_loc,
       format_name=format_name
     )
 
@@ -161,6 +217,8 @@ def main() -> None:
   log_file_loc = args.log if args.log else ""
   with LoggerFactory(log_file_loc) as logger_factory:
     logger_factory.set_loggers()
+
+    # TODO: do validation on args.split (0<=1)
 
     split_and_convert_data(
       input_file_loc=args.input,
