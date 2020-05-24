@@ -7,6 +7,7 @@ import csv
 import sys
 from typing import Callable, Dict, List, Text
 
+import pandas as pd
 from loggers import LoggerFactory
 
 # This field_size_limit is needed to import the data CSV
@@ -60,29 +61,52 @@ FORMAT_DEFAULT: Text = "tag_all_except_transcript"
 
 
 def convert_data(
-  input_file_loc: Text,
+  input_list: List[Dict[Text, Text]],
   output_file_loc: Text,
   format_name: Text
+) -> None:
+  print("\n---Converting data---")
+  print("Output location: {}".format(output_file_loc))
+  print("Format name: {}".format(format_name))
+
+  format_template: FormatTemplate = FORMAT_TEMPLATES[format_name]
+  num_entries: int = 0
+
+  with open(output_file_loc, "w", encoding="utf-8") as output_file:
+    for input_entry in input_list:
+      output_txt: Text = format_template.convert(input_entry)
+      output_file.write(output_txt)
+      output_file.write("\n")
+      num_entries += 1
+  
+  print("Number of entries: {}".format(num_entries))
+
+
+def split_and_convert_data(
+  input_file_loc: Text,
+  output_file_loc: Text,
+  format_name: Text,
+  train_split: float,
+  val_split: float,
+  random_seed: int
 ) -> None:
   print("Input csv location: {}".format(input_file_loc))
   print("Output location: {}".format(output_file_loc))
   print("Format name: {}".format(format_name))
-  
-  format_template: FormatTemplate = FORMAT_TEMPLATES[format_name]
-  num_entries: int = 0
+  print("Training split: {}".format(train_split))
+  print("Validation split: {}".format(val_split))
+  print("Random seed: {}".format(random_seed))
 
-  with open(input_file_loc, "r", newline="", encoding="utf-8") as input_file:
-    input_reader = csv.DictReader(
-      input_file, quoting=csv.QUOTE_ALL
+  # First read the csv
+  input_df = pd.read_csv(input_file_loc, quoting=csv.QUOTE_ALL)
+
+  if (train_split == 1.0) and (val_split == 0.0):
+    # If no train-val-test split is needed, just perform the conversion directly
+    convert_data(
+      input_list=input_df.to_dict('records'),
+      output_file_loc=output_file_loc,
+      format_name=format_name
     )
-    with open(output_file_loc, "w", encoding="utf-8") as output_file:
-      for input_entry in input_reader:
-        output_txt: Text = format_template.convert(input_entry)
-        output_file.write(output_txt)
-        output_file.write("\n")
-        num_entries += 1
-  
-  print("Number of entries: {}".format(num_entries))
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,6 +136,22 @@ def parse_args() -> argparse.Namespace:
     choices=FORMAT_NAMES
   )
 
+  parser.add_argument(
+    "-s", "--split", type=float, required=False, nargs=2, default=[1.0, 0.0],
+    help="""The train-val-test split, if desired.
+Takes two arguments, of the form 'train val', where both are floats.
+The 'train' value is the percentage of the total data to be trained on.
+The 'val' value is the percentage of the training data to use for validation.
+The remaining (1 - 'train') will be set aside for testing.
+Defaults to 'train' = 1 (all training).
+    """
+  )
+
+  parser.add_argument(
+    "-r", "--random", type=int, required=False, default=1234,
+    help="The random seed to use. Defaults to 1234"
+  )
+
   return parser.parse_args()
 
 
@@ -122,10 +162,13 @@ def main() -> None:
   with LoggerFactory(log_file_loc) as logger_factory:
     logger_factory.set_loggers()
 
-    convert_data(
+    split_and_convert_data(
       input_file_loc=args.input,
       output_file_loc=args.output,
-      format_name=args.format
+      format_name=args.format,
+      train_split=args.split[0],
+      val_split=args.split[1],
+      random_seed=args.random
     )
 
 
