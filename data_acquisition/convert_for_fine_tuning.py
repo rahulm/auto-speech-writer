@@ -6,7 +6,7 @@ import argparse
 import csv
 import os
 import sys
-from typing import Callable, Dict, List, Text, Tuple
+from typing import Callable, Dict, List, Optional, Text, Tuple
 
 import pandas as pd
 
@@ -26,10 +26,15 @@ class FormatTemplate():
   def __init__(
     self,
     name: Text,
-    convert_fn: Callable[[Dict, bool], Text]
+    convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]],
+    format_args: Optional[List[Text]]
   ) -> None:
     self.name: Text = name
-    self.convert: Callable[[Dict, bool], Text] = convert_fn
+    self.format_args: Optional[List[Text]] = format_args
+    self.convert: Callable[[Dict, bool], Text] = convert_fn(self.format_args)
+  
+  def __repr__(self) -> Text:
+    return "{{name='{}', format_args={}}}".format(self.name, self.format_args)
 
 
 def make_tag(header: Text, content: Text) -> Text:
@@ -66,14 +71,11 @@ def make_tag_with_truncate(
     return make_tag(header, content)
 
 
-def convert_tag_all_except_transcript() -> Callable[[Dict, bool], Text]:
-  input_headers: List[Text] = [
-    "title",
-    "speaker",
-    "year",
-    "summary"
-  ]
-  transcript_header: Text = "transcript"
+def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict, bool], Text]:
+  if not format_args:
+    raise ValueError("a non-empty format_args is required")
+  input_headers: List[Text] = format_args[:-1]
+  transcript_header: Text = format_args[-1]
   def inner_function(d: Dict, truncate_summary: bool) -> Text:
     output_row_list: List[Text] = [
       make_tag_with_truncate(
@@ -88,30 +90,50 @@ def convert_tag_all_except_transcript() -> Callable[[Dict, bool], Text]:
   return inner_function
 
 
-FORMAT_TEMPLATES: Dict[Text, FormatTemplate] = {
-  "tag_all_except_transcript" : FormatTemplate(
-    name="tag_all_except_transcript",
-    convert_fn=convert_tag_all_except_transcript()
+def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Callable[[Dict, bool], Text]:
+  input_headers: List[Text] = [
+    "title",
+    "speaker",
+    "year",
+    "summary",
+    "transcript"
+  ]
+  return convert_tags_custom(
+    format_args=input_headers
   )
+
+
+FORMAT_TEMPLATE_FNS: Dict[Text, Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]]] = {
+  "tag_all_except_transcript" : convert_tag_all_except_transcript,
+  "tags_custom" : convert_tags_custom
 }
-
-
-FORMAT_NAMES: List[Text] = list(FORMAT_TEMPLATES.keys())
+FORMAT_NAMES: List[Text] = list(FORMAT_TEMPLATE_FNS.keys())
 FORMAT_DEFAULT: Text = "tag_all_except_transcript"
+
+
+def get_format_template(
+  format_name: Text,
+  format_args: List[Text]
+) -> FormatTemplate:
+  format_convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]] = FORMAT_TEMPLATE_FNS[format_name]
+  return FormatTemplate(
+    name=format_name,
+    convert_fn=format_convert_fn,
+    format_args=format_args
+  )
 
 
 def convert_data(
   input_list: List[Dict[Text, Text]],
   output_file_loc: Text,
-  format_name: Text,
+  format_template: FormatTemplate,
   truncate_summaries: bool
 ) -> None:
   print("\n---Converting data---")
   print("Output location: {}".format(output_file_loc))
-  print("Format name: {}".format(format_name))
+  print("Format template: {}".format(format_template))
   print("Truncate summaries: {}".format(truncate_summaries))
 
-  format_template: FormatTemplate = FORMAT_TEMPLATES[format_name]
   num_entries: int = 0
 
   with open(output_file_loc, "w", encoding="utf-8") as output_file:
@@ -131,6 +153,7 @@ def split_and_convert_data(
   input_file_loc: Text,
   output_file_loc: Text,
   format_name: Text,
+  format_args: List[Text],
   train_split: float,
   val_split: float,
   random_seed: int,
@@ -139,6 +162,7 @@ def split_and_convert_data(
   print("Input csv location: {}".format(input_file_loc))
   print("Output location: {}".format(output_file_loc))
   print("Format name: {}".format(format_name))
+  print("Format args: {}".format(format_args))
   print("Training split: {}".format(train_split))
   print("Validation split: {}".format(val_split))
   print("Random seed: {}".format(random_seed))
@@ -201,12 +225,16 @@ def split_and_convert_data(
     )
     split_pairs.append((train_df.to_dict("records"), train_output_file_loc))
   
-  
+  format_template: FormatTemplate = get_format_template(
+    format_name=format_name,
+    format_args=format_args
+  )
+
   for split_data, split_output_file_loc in split_pairs:
     convert_data(
       input_list=split_data,
       output_file_loc=split_output_file_loc,
-      format_name=format_name,
+      format_template=format_template,
       truncate_summaries=truncate_summaries
     )
 
@@ -231,11 +259,9 @@ def parse_args() -> argparse.Namespace:
   )
   
   parser.add_argument(
-    "-f", "--format", type=str, default=FORMAT_DEFAULT,
-    help="The type of format to convert into. Choose from {}".format(
-      FORMAT_NAMES
-    ),
-    choices=FORMAT_NAMES
+    "-f", "--format", type=str, nargs="+", default=[FORMAT_DEFAULT],
+    help="""The type of format to convert into.
+Choose from following, with args if needed: {}""".format(FORMAT_NAMES)
   )
 
   parser.add_argument(
@@ -283,7 +309,8 @@ def main() -> None:
     split_and_convert_data(
       input_file_loc=args.input,
       output_file_loc=args.output,
-      format_name=args.format,
+      format_name=args.format[0],
+      format_args=args.format[1:],
       train_split=args.split[0],
       val_split=args.split[1],
       random_seed=args.random,
