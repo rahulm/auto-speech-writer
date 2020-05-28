@@ -41,36 +41,6 @@ def make_tag(header: Text, content: Text) -> Text:
   return '<{}="{}">'.format(header, content)
 
 
-# NOTE: This method does not actually cover all cases. May need to redo.
-# END_OF_SENTENCE_PUNCTUATION: List[Text] = [
-#   ".",
-#   "!",
-#   "?",
-#   ".'",
-#   ".\"",
-#   "!'",
-#   "!\"",
-#   "?'",
-#   "?\""
-# ]
-# def truncate_incomplete_sentences(x: Text) -> Text:
-#   last_punc: int = max(x.rfind(p) for p in END_OF_SENTENCE_PUNCTUATION)
-#   if last_punc == -1:
-#     return x
-#   return x[:last_punc + 1]
-
-
-# # def make_tag_with_truncate(
-# #   header: Text,
-# #   content: Text,
-# #   truncate_summary: bool
-# # ) -> Text:
-# #   if truncate_summary and (header == "summary"):
-# #     return make_tag(header, truncate_incomplete_sentences(content))
-# #   else:
-# #     return make_tag(header, content)
-
-
 def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict], Text]:
   if not format_args:
     raise ValueError("a non-empty format_args is required")
@@ -267,12 +237,6 @@ Defaults to 'train' = 1 (all training).
     "-r", "--random", type=int, required=False, default=1234,
     help="The random seed to use. Defaults to 1234"
   )
-
-#   parser.add_argument(
-#     "-t", "--truncate", action="store_true", default=False,
-#     help="""Remove unfinished sentences from the summaries.
-# This is temporary, need to handle earlier when generating summaries."""
-#   )
 
   args = parser.parse_args()
 
