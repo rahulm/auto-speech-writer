@@ -29,22 +29,25 @@ class FormatTemplate():
     convert_fn: Callable[..., Callable[[Dict], Text]],
     format_args: Optional[List[Text]],
     eos_token: Text,
-    cls_token: Text
+    cls_token: Text,
+    tag_fn_name: Text
   ) -> None:
     self.name: Text = name
     self.format_args: Optional[List[Text]] = format_args
     self.eos_token: Text = eos_token
     self.cls_token: Text = cls_token
+    self.tag_fn_name: Text = tag_fn_name
 
     self.convert: Callable[[Dict], Text] = convert_fn(
       format_args=self.format_args,
       eos_token=self.eos_token,
-      cls_token=self.cls_token
+      cls_token=self.cls_token,
+      make_tag_fn=get_tag_function(self.tag_fn_name)
     )
   
   def __repr__(self) -> Text:
-    return "{{name='{}', format_args={}, eos_token={}, cls_token={}}}".format(
-      self.name, self.format_args, repr(self.eos_token), repr(self.cls_token)
+    return "{{name='{}', format_args={}, eos_token={}, cls_token={}, tag_fn_name={}}}".format(
+      self.name, self.format_args, repr(self.eos_token), repr(self.cls_token), self.tag_fn_name
     )
 
 
@@ -56,8 +59,13 @@ def make_tag_v2(header: Text, content: Text) -> Text:
   return '<{}= {} >'.format(header, content)
 
 
-def make_tag(header: Text, content: Text) -> Text:
+def make_tag_v3(header: Text, content: Text) -> Text:
   return '<|{}|>\n{}'.format(header, content)
+
+
+ALLOWED_TAG_NAMES: List[Text] = ["v1", "v2", "v3"]
+def get_tag_function(tag_name: Text) -> Callable[[Text, Text], Text]:
+  return globals()["make_tag_{}".format(tag_name)]
 
 
 def make_special_token(token: Text) -> Text:
@@ -74,6 +82,7 @@ def convert_tags_custom(
   format_args: List[Text],
   cls_token: Text,
   eos_token: Text,
+  make_tag_fn: Callable[[Text, Text], Text],
   **kwargs: Any
 ) -> Callable[[Dict], Text]:
   input_headers: List[Text] = format_args[:-1]
@@ -84,7 +93,7 @@ def convert_tags_custom(
 
   def inner_function(d: Dict) -> Text:
     output_row_list: List[Text] = [
-      make_tag(header=header, content=d[header])
+      make_tag_fn(header, d[header])
       for header in input_headers
     ]
     output_str: Text = "{features}{cls}{transcript}{eos}".format(
@@ -126,7 +135,8 @@ def get_format_template(
   format_name: Text,
   format_args: List[Text],
   eos_token: Text,
-  cls_token: Text
+  cls_token: Text,
+  tag_fn_name: Text
 ) -> FormatTemplate:
   format_convert_fn: Callable[..., Callable[[Dict], Text]] = FORMAT_TEMPLATE_FNS[format_name]
   return FormatTemplate(
@@ -134,7 +144,8 @@ def get_format_template(
     convert_fn=format_convert_fn,
     format_args=format_args,
     eos_token=eos_token,
-    cls_token=cls_token
+    cls_token=cls_token,
+    tag_fn_name=tag_fn_name
   )
 
 
@@ -167,7 +178,8 @@ def split_and_convert_data(
   val_split: float,
   random_seed: int,
   eos_token: Text,
-  cls_token: Text
+  cls_token: Text,
+  tag_fn_name: Text
 ) -> None:
   print("Input csv location: {}".format(input_file_loc))
   print("Output location: {}".format(output_file_loc))
@@ -178,6 +190,7 @@ def split_and_convert_data(
   print("Random seed: {}".format(random_seed))
   print("End of sequence token (eos_token): {}".format(repr(eos_token)))
   print("Classification token (cls_token): {}".format(repr(cls_token)))
+  print("Tag function name: {}".format(tag_fn_name))
 
   # First read the csv
   input_df = pd.read_csv(input_file_loc, quoting=csv.QUOTE_ALL)
@@ -240,7 +253,8 @@ def split_and_convert_data(
     format_name=format_name,
     format_args=format_args,
     eos_token=eos_token,
-    cls_token=cls_token
+    cls_token=cls_token,
+    tag_fn_name=tag_fn_name
   )
 
   for split_data, split_output_file_loc in split_pairs:
@@ -310,6 +324,13 @@ If included without a string (ex: --cls), defaults to <|cls|>.
 """
   )
 
+  parser.add_argument(
+    "-t", "--tag", type=str, required=False, default="v3",
+    help="Specify the type of tagging to use. Choose from {}".format(
+      ALLOWED_TAG_NAMES
+    ), choices=ALLOWED_TAG_NAMES
+  )
+
   args = parser.parse_args()
 
   split_train, split_val = args.split
@@ -339,7 +360,8 @@ def main() -> None:
       val_split=args.split[1],
       random_seed=args.random,
       eos_token=args.eos,
-      cls_token=args.cls
+      cls_token=args.cls,
+      tag_fn_name=args.tag
     )
 
 
