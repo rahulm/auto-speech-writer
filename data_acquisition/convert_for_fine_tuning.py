@@ -6,7 +6,7 @@ import argparse
 import csv
 import os
 import sys
-from typing import Callable, Dict, List, Optional, Text, Tuple
+from typing import Any, Callable, Dict, List, Optional, Text, Tuple
 
 import pandas as pd
 
@@ -26,37 +26,72 @@ class FormatTemplate():
   def __init__(
     self,
     name: Text,
-    convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict], Text]],
-    format_args: Optional[List[Text]]
+    convert_fn: Callable[..., Callable[[Dict], Text]],
+    format_args: Optional[List[Text]],
+    eos_token: Text,
+    cls_token: Text
   ) -> None:
     self.name: Text = name
     self.format_args: Optional[List[Text]] = format_args
-    self.convert: Callable[[Dict], Text] = convert_fn(self.format_args)
+    self.eos_token: Text = eos_token
+    self.cls_token: Text = cls_token
+
+    self.convert: Callable[[Dict], Text] = convert_fn(
+      format_args=self.format_args,
+      eos_token=self.eos_token,
+      cls_token=self.cls_token
+    )
   
   def __repr__(self) -> Text:
-    return "{{name='{}', format_args={}}}".format(self.name, self.format_args)
+    return "{{name='{}', format_args={}, eos_token={}, cls_token={}}}".format(
+      self.name, self.format_args, repr(self.eos_token), repr(self.cls_token)
+    )
 
 
 def make_tag(header: Text, content: Text) -> Text:
   return '<{}="{}">'.format(header, content)
 
 
-def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict], Text]:
-  if not format_args:
-    raise ValueError("a non-empty format_args is required")
+def make_special_token(token: Text) -> Text:
+  token = token.strip()
+  is_newline = (token == "\n")
+  return "{}{}{}".format(
+    "" if is_newline else "\n",
+    token,
+    "" if is_newline else "\n"
+  )
+
+
+def convert_tags_custom(
+  format_args: List[Text],
+  cls_token: Text,
+  eos_token: Text,
+  **kwargs: Any
+) -> Callable[[Dict], Text]:
   input_headers: List[Text] = format_args[:-1]
   transcript_header: Text = format_args[-1]
+
+  cls_token_out = make_special_token(token=cls_token)
+  eos_token_out = make_special_token(token=eos_token)
+
   def inner_function(d: Dict) -> Text:
     output_row_list: List[Text] = [
       make_tag(header=header, content=d[header])
       for header in input_headers
     ]
-    output_row_list.append(d[transcript_header])
-    return '\n'.join(output_row_list)
+    output_str: Text = "{features}{cls}{transcript}{eos}".format(
+      features="\n".join(output_row_list),
+      cls=cls_token_out,
+      transcript=d[transcript_header],
+      eos=eos_token_out
+    )
+
+    return output_str
+  
   return inner_function
 
 
-def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Callable[[Dict], Text]:
+def convert_tag_all_except_transcript(**kwargs: Any) -> Callable[[Dict], Text]:
   input_headers: List[Text] = [
     "title",
     "speaker",
@@ -64,12 +99,14 @@ def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Call
     "summary",
     "transcript"
   ]
+  kwargs.pop("format_args", None)
   return convert_tags_custom(
-    format_args=input_headers
+    format_args=input_headers,
+    **kwargs
   )
 
 
-FORMAT_TEMPLATE_FNS: Dict[Text, Callable[[Optional[List[Text]]], Callable[[Dict], Text]]] = {
+FORMAT_TEMPLATE_FNS: Dict[Text, Callable[..., Callable[[Dict], Text]]] = {
   "tag_all_except_transcript" : convert_tag_all_except_transcript,
   "tags_custom" : convert_tags_custom
 }
@@ -79,13 +116,17 @@ FORMAT_DEFAULT: Text = "tag_all_except_transcript"
 
 def get_format_template(
   format_name: Text,
-  format_args: List[Text]
+  format_args: List[Text],
+  eos_token: Text,
+  cls_token: Text
 ) -> FormatTemplate:
-  format_convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict], Text]] = FORMAT_TEMPLATE_FNS[format_name]
+  format_convert_fn: Callable[..., Callable[[Dict], Text]] = FORMAT_TEMPLATE_FNS[format_name]
   return FormatTemplate(
     name=format_name,
     convert_fn=format_convert_fn,
-    format_args=format_args
+    format_args=format_args,
+    eos_token=eos_token,
+    cls_token=cls_token
   )
 
 
@@ -104,7 +145,6 @@ def convert_data(
     for input_entry in input_list:
       output_txt: Text = format_template.convert(input_entry)
       output_file.write(output_txt)
-      output_file.write("\n")
       num_entries += 1
   
   print("Number of entries: {}".format(num_entries))
@@ -117,7 +157,9 @@ def split_and_convert_data(
   format_args: List[Text],
   train_split: float,
   val_split: float,
-  random_seed: int
+  random_seed: int,
+  eos_token: Text,
+  cls_token: Text
 ) -> None:
   print("Input csv location: {}".format(input_file_loc))
   print("Output location: {}".format(output_file_loc))
@@ -126,6 +168,8 @@ def split_and_convert_data(
   print("Training split: {}".format(train_split))
   print("Validation split: {}".format(val_split))
   print("Random seed: {}".format(random_seed))
+  print("End of sequence token (eos_token): {}".format(repr(eos_token)))
+  print("Classification token (cls_token): {}".format(repr(cls_token)))
 
   # First read the csv
   input_df = pd.read_csv(input_file_loc, quoting=csv.QUOTE_ALL)
@@ -186,7 +230,9 @@ def split_and_convert_data(
   
   format_template: FormatTemplate = get_format_template(
     format_name=format_name,
-    format_args=format_args
+    format_args=format_args,
+    eos_token=eos_token,
+    cls_token=cls_token
   )
 
   for split_data, split_output_file_loc in split_pairs:
@@ -203,7 +249,7 @@ def parse_args() -> argparse.Namespace:
   )
   parser.add_argument(
     "-i", "--input", type=str, required=True,
-    help="Input csv location. Should be output of the process_ra_data.py script"
+    help="Input csv location. Should be output of the process_raw_data.py script"
   )
 
   parser.add_argument(
@@ -238,6 +284,24 @@ Defaults to 'train' = 1 (all training).
     help="The random seed to use. Defaults to 1234"
   )
 
+  parser.add_argument(
+    "--eos", type=str, required=False, nargs="?",
+    default="\n", const="<|endoftext|>",
+    help="""The eos_token to insert in between sequences (speeches).
+Can accept a string to use. Spaces are stripped, and it is padded by newlines.
+If included without a string (ex: --eos), defaults to <|endoftext|>.
+"""
+  )
+
+  parser.add_argument(
+    "--cls", type=str, required=False, nargs="?",
+    default="\n", const="<|cls|>",
+    help="""The cls_token to insert in between the features and the transcripts.
+Can accept a string to use. Spaces are stripped, and it is padded by newlines.
+If included without a string (ex: --cls), defaults to <|cls|>.
+"""
+  )
+
   args = parser.parse_args()
 
   split_train, split_val = args.split
@@ -265,7 +329,9 @@ def main() -> None:
       format_args=args.format[1:],
       train_split=args.split[0],
       val_split=args.split[1],
-      random_seed=args.random
+      random_seed=args.random,
+      eos_token=args.eos,
+      cls_token=args.cls
     )
 
 
