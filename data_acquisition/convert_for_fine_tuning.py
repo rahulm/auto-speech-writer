@@ -26,12 +26,12 @@ class FormatTemplate():
   def __init__(
     self,
     name: Text,
-    convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]],
+    convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict], Text]],
     format_args: Optional[List[Text]]
   ) -> None:
     self.name: Text = name
     self.format_args: Optional[List[Text]] = format_args
-    self.convert: Callable[[Dict, bool], Text] = convert_fn(self.format_args)
+    self.convert: Callable[[Dict], Text] = convert_fn(self.format_args)
   
   def __repr__(self) -> Text:
     return "{{name='{}', format_args={}}}".format(self.name, self.format_args)
@@ -42,47 +42,43 @@ def make_tag(header: Text, content: Text) -> Text:
 
 
 # NOTE: This method does not actually cover all cases. May need to redo.
-END_OF_SENTENCE_PUNCTUATION: List[Text] = [
-  ".",
-  "!",
-  "?",
-  ".'",
-  ".\"",
-  "!'",
-  "!\"",
-  "?'",
-  "?\""
-]
-def truncate_incomplete_sentences(x: Text) -> Text:
-  last_punc: int = max(x.rfind(p) for p in END_OF_SENTENCE_PUNCTUATION)
-  if last_punc == -1:
-    return x
-  return x[:last_punc + 1]
+# END_OF_SENTENCE_PUNCTUATION: List[Text] = [
+#   ".",
+#   "!",
+#   "?",
+#   ".'",
+#   ".\"",
+#   "!'",
+#   "!\"",
+#   "?'",
+#   "?\""
+# ]
+# def truncate_incomplete_sentences(x: Text) -> Text:
+#   last_punc: int = max(x.rfind(p) for p in END_OF_SENTENCE_PUNCTUATION)
+#   if last_punc == -1:
+#     return x
+#   return x[:last_punc + 1]
 
 
-def make_tag_with_truncate(
-  header: Text,
-  content: Text,
-  truncate_summary: bool
-) -> Text:
-  if truncate_summary and (header == "summary"):
-    return make_tag(header, truncate_incomplete_sentences(content))
-  else:
-    return make_tag(header, content)
+# # def make_tag_with_truncate(
+# #   header: Text,
+# #   content: Text,
+# #   truncate_summary: bool
+# # ) -> Text:
+# #   if truncate_summary and (header == "summary"):
+# #     return make_tag(header, truncate_incomplete_sentences(content))
+# #   else:
+# #     return make_tag(header, content)
 
 
-def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict, bool], Text]:
+def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict], Text]:
   if not format_args:
     raise ValueError("a non-empty format_args is required")
   input_headers: List[Text] = format_args[:-1]
   transcript_header: Text = format_args[-1]
-  def inner_function(d: Dict, truncate_summary: bool) -> Text:
+  def inner_function(d: Dict) -> Text:
     output_row_list: List[Text] = [
-      make_tag_with_truncate(
-        header=header,
-        content=d[header],
-        truncate_summary=truncate_summary
-      )
+      make_tag(header=header, content=d[header])
       for header in input_headers
     ]
     output_row_list.append(d[transcript_header])
@@ -90,7 +86,7 @@ def convert_tags_custom(format_args: Optional[List[Text]]) -> Callable[[Dict, bo
   return inner_function
 
 
-def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Callable[[Dict, bool], Text]:
+def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Callable[[Dict], Text]:
   input_headers: List[Text] = [
     "title",
     "speaker",
@@ -103,7 +99,7 @@ def convert_tag_all_except_transcript(format_args: Optional[List[Text]]) -> Call
   )
 
 
-FORMAT_TEMPLATE_FNS: Dict[Text, Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]]] = {
+FORMAT_TEMPLATE_FNS: Dict[Text, Callable[[Optional[List[Text]]], Callable[[Dict], Text]]] = {
   "tag_all_except_transcript" : convert_tag_all_except_transcript,
   "tags_custom" : convert_tags_custom
 }
@@ -115,7 +111,7 @@ def get_format_template(
   format_name: Text,
   format_args: List[Text]
 ) -> FormatTemplate:
-  format_convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict, bool], Text]] = FORMAT_TEMPLATE_FNS[format_name]
+  format_convert_fn: Callable[[Optional[List[Text]]], Callable[[Dict], Text]] = FORMAT_TEMPLATE_FNS[format_name]
   return FormatTemplate(
     name=format_name,
     convert_fn=format_convert_fn,
@@ -126,22 +122,17 @@ def get_format_template(
 def convert_data(
   input_list: List[Dict[Text, Text]],
   output_file_loc: Text,
-  format_template: FormatTemplate,
-  truncate_summaries: bool
+  format_template: FormatTemplate
 ) -> None:
   print("\n---Converting data---")
   print("Output location: {}".format(output_file_loc))
   print("Format template: {}".format(format_template))
-  print("Truncate summaries: {}".format(truncate_summaries))
 
   num_entries: int = 0
 
   with open(output_file_loc, "w", encoding="utf-8") as output_file:
     for input_entry in input_list:
-      output_txt: Text = format_template.convert(
-        input_entry,
-        truncate_summaries
-      )
+      output_txt: Text = format_template.convert(input_entry)
       output_file.write(output_txt)
       output_file.write("\n")
       num_entries += 1
@@ -156,8 +147,7 @@ def split_and_convert_data(
   format_args: List[Text],
   train_split: float,
   val_split: float,
-  random_seed: int,
-  truncate_summaries: bool
+  random_seed: int
 ) -> None:
   print("Input csv location: {}".format(input_file_loc))
   print("Output location: {}".format(output_file_loc))
@@ -166,7 +156,6 @@ def split_and_convert_data(
   print("Training split: {}".format(train_split))
   print("Validation split: {}".format(val_split))
   print("Random seed: {}".format(random_seed))
-  print("Truncate summaries: {}".format(truncate_summaries))
 
   # First read the csv
   input_df = pd.read_csv(input_file_loc, quoting=csv.QUOTE_ALL)
@@ -234,8 +223,7 @@ def split_and_convert_data(
     convert_data(
       input_list=split_data,
       output_file_loc=split_output_file_loc,
-      format_template=format_template,
-      truncate_summaries=truncate_summaries
+      format_template=format_template
     )
 
 
@@ -280,11 +268,11 @@ Defaults to 'train' = 1 (all training).
     help="The random seed to use. Defaults to 1234"
   )
 
-  parser.add_argument(
-    "-t", "--truncate", action="store_true", default=False,
-    help="""Remove unfinished sentences from the summaries.
-This is temporary, need to handle earlier when generating summaries."""
-  )
+#   parser.add_argument(
+#     "-t", "--truncate", action="store_true", default=False,
+#     help="""Remove unfinished sentences from the summaries.
+# This is temporary, need to handle earlier when generating summaries."""
+#   )
 
   args = parser.parse_args()
 
@@ -313,8 +301,7 @@ def main() -> None:
       format_args=args.format[1:],
       train_split=args.split[0],
       val_split=args.split[1],
-      random_seed=args.random,
-      truncate_summaries=args.truncate
+      random_seed=args.random
     )
 
 
