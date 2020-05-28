@@ -48,8 +48,16 @@ class FormatTemplate():
     )
 
 
-def make_tag(header: Text, content: Text) -> Text:
+def make_tag_v1(header: Text, content: Text) -> Text:
   return '<{}="{}">'.format(header, content)
+
+
+def make_tag_v2(header: Text, content: Text) -> Text:
+  return '<{}= {} >'.format(header, content)
+
+
+def make_tag(header: Text, content: Text) -> Text:
+  return '<|{}|>\n{}'.format(header, content)
 
 
 def make_special_token(token: Text) -> Text:
