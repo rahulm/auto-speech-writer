@@ -1,5 +1,5 @@
 # auto-speech-writer
-An automatic speech writer developed as a final project for CS 263 under Prof. Kai-Wei Chang
+An automatic speech writer developed as a final project+[report](automatic_speech_writer.pdf) for CS 263 under Prof. Kai-Wei Chang.
 
 ## Team members
 
